@@ -1,0 +1,429 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>도망자 쇼</title>
+<style>
+  html,body{margin:0;padding:0;height:100%;overflow:hidden;background:#26304a;
+    font-family:"Apple SD Gothic Neo","Noto Sans KR",system-ui,sans-serif;
+    touch-action:none;-webkit-user-select:none;user-select:none;color:#fff;}
+  canvas{display:block;}
+  .ov{position:fixed;pointer-events:none;z-index:10;}
+
+  #top{top:max(8px,env(safe-area-inset-top));left:0;right:0;display:flex;justify-content:center;gap:8px;}
+  .pill{background:rgba(20,26,40,.72);border-radius:12px;padding:6px 14px;font-size:15px;font-weight:800;}
+  #timer{color:#ffe08a;}
+  #roleCard{top:calc(max(8px,env(safe-area-inset-top)) + 42px);left:50%;transform:translateX(-50%);
+    border-radius:14px;padding:6px 16px;font-size:14px;font-weight:800;background:rgba(20,26,40,.8);}
+  #pdBanner{top:38%;left:50%;transform:translate(-50%,-50%);text-align:center;max-width:88vw;
+    background:rgba(30,24,60,.86);border:2px solid #7d6bd6;border-radius:16px;padding:14px 22px;
+    font-size:18px;font-weight:800;opacity:0;transition:opacity .3s;box-shadow:0 6px 30px rgba(0,0,0,.4);}
+  #pdBanner small{display:block;font-size:13px;font-weight:600;color:#c9bef0;margin-top:3px;}
+  #pdLog{bottom:calc(max(8px,env(safe-area-inset-bottom)) + 6px);left:10px;font-size:12.5px;line-height:1.5;
+    max-width:60vw;color:#d7def0;text-shadow:0 1px 2px #000;}
+  #pdLog b{color:#ffd36a;}
+
+  /* 터치 */
+  #joyBase{position:fixed;width:118px;height:118px;border-radius:50%;background:rgba(255,255,255,.14);
+    border:2px solid rgba(255,255,255,.4);display:none;z-index:11;}
+  #joyThumb{position:fixed;width:50px;height:50px;border-radius:50%;background:rgba(255,255,255,.5);display:none;z-index:12;}
+  #actBtn{position:fixed;right:24px;bottom:120px;width:88px;height:88px;border-radius:50%;border:none;
+    background:rgba(255,210,110,.85);color:#4a3410;font-weight:900;font-size:15px;z-index:12;display:none;
+    box-shadow:0 3px 8px rgba(0,0,0,.3);}
+  #actBtn:active{transform:scale(.94);}
+
+  .screen{position:fixed;inset:0;z-index:30;background:rgba(20,28,48,.72);backdrop-filter:blur(6px);
+    display:flex;align-items:center;justify-content:center;}
+  .card{background:#fbf7ee;color:#3a3320;border-radius:22px;padding:24px 28px;max-width:440px;margin:16px;
+    text-align:center;box-shadow:0 12px 44px rgba(0,0,0,.4);}
+  .card h1{margin:0 0 4px;font-size:28px;}
+  .card p.sub{margin:0 0 14px;color:#8a7c58;font-size:14px;}
+  .help{text-align:left;font-size:13.5px;line-height:1.75;background:#efe9d8;border-radius:12px;padding:12px 16px;margin-bottom:16px;color:#5f5535;}
+  .row{display:flex;align-items:center;justify-content:center;gap:8px;margin:10px 0;font-size:15px;font-weight:700;}
+  .row button{border:none;background:#e7e0cd;width:34px;height:34px;border-radius:10px;font-size:20px;font-weight:900;cursor:pointer;}
+  .big{border:none;color:#fff;font-size:19px;font-weight:800;padding:12px 40px;border-radius:999px;cursor:pointer;}
+  #playBtn{background:#e0713a;box-shadow:0 4px 0 #b4551f;}
+  #playBtn:active{transform:translateY(3px);box-shadow:0 1px 0 #b4551f;}
+  .choice{display:inline-block;margin:3px;padding:8px 14px;border-radius:999px;border:2px solid #d8cfb6;background:#fff;
+    font-weight:800;font-size:14px;cursor:pointer;color:#6a5f3a;}
+  .choice.on{border-color:#e0713a;background:#ffe9dc;color:#c1571f;}
+  #resultTitle{font-size:30px;margin:0 0 6px;}
+</style>
+</head>
+<body>
+<div id="top" class="ov">
+  <div class="pill" id="timer">⏱ 90</div>
+  <div class="pill" id="alive">🏃 0</div>
+  <div class="pill" id="mission">📋 대기</div>
+</div>
+<div id="roleCard" class="ov">역할: -</div>
+<div id="pdBanner" class="ov"></div>
+<div id="pdLog" class="ov"></div>
+
+<div id="joyBase"></div><div id="joyThumb"></div>
+<button id="actBtn">액션</button>
+
+<div id="splash" class="screen">
+  <div class="card">
+    <h1>🎭 도망자 쇼</h1>
+    <p class="sub">숨은 정체, 쫓고 쫓기는 추격 — PD의 미션을 수행하며 살아남아라!</p>
+    <div class="help" id="help"></div>
+    <div class="row">인원 <button id="pMinus">−</button><span id="pCount">6</span><button id="pPlus">+</button> 명 (봇 포함)</div>
+    <div class="row" style="flex-direction:column;gap:6px;">
+      <div style="font-size:13px;color:#8a7c58;">나의 희망 역할</div>
+      <div>
+        <span class="choice on" data-pref="auto">🎲 랜덤</span>
+        <span class="choice" data-pref="runner">🏃 도망자</span>
+        <span class="choice" data-pref="hunter">👹 헌터</span>
+      </div>
+    </div>
+    <button id="playBtn" class="big" disabled>불러오는 중…</button>
+  </div>
+</div>
+
+<div id="result" class="screen" style="display:none;">
+  <div class="card">
+    <h1 id="resultTitle">결과</h1>
+    <p class="sub" id="resultSub"></p>
+    <div class="help" id="resultDetail" style="text-align:center;"></div>
+    <button id="againBtn" class="big" style="background:#5aa04a;box-shadow:0 4px 0 #3d7830;">다시 (역할 재배정)</button>
+  </div>
+</div>
+
+<script>
+window.addEventListener('error', function(e){ var el=document.getElementById('help'); if(el&&!window.__loaded) el.textContent='⚠️ 오류: '+(e.message||'?'); });
+</script>
+<script>
+"use strict";
+// ================= 도망자 쇼 v1 (로컬 + 봇, 네트워킹 대비 구조) =================
+// 게임 상태(state)는 한 곳에 모으고 입력→갱신→렌더를 분리 → 이후 P2P 동기화 용이.
+
+const cv = document.createElement('canvas'); document.body.insertBefore(cv, document.body.firstChild);
+const ctx = cv.getContext('2d');
+let W=innerWidth, H=innerHeight, DPR=Math.min(devicePixelRatio,2);
+function resize(){ W=innerWidth; H=innerHeight; DPR=Math.min(devicePixelRatio,2);
+  cv.width=W*DPR; cv.height=H*DPR; cv.style.width=W+'px'; cv.style.height=H+'px'; ctx.setTransform(DPR,0,0,DPR,0,0); }
+resize(); addEventListener('resize', resize);
+
+// ---- 아레나 ----
+const AW=1700, AH=1200, R=17, CATCH=30;
+const walls=[
+  {x:300,y:250,w:230,h:44},{x:300,y:250,w:44,h:230},
+  {x:1150,y:250,w:250,h:44},{x:1356,y:250,w:44,h:250},
+  {x:250,y:900,w:44,h:230},{x:250,y:1086,w:260,h:44},
+  {x:1180,y:920,w:280,h:44},{x:760,y:560,w:200,h:44},{x:860,y:420,w:44,h:200},
+  {x:560,y:820,w:44,h:220},{x:1050,y:640,w:44,h:220},
+];
+const jail={x:AW/2-120,y:60,w:240,h:150};
+let switches=[]; // {x,y,on}
+function resetSwitches(){ switches=[{x:360,y:640,on:false},{x:AW-360,y:520,on:false},{x:AW/2,y:AH-260,on:false}]; }
+
+// ---- 상태 ----
+const S={ players:[], time:0, dur:90, phase:'menu', missionActive:false, missionDone:false,
+  freezeT:0, winner:null, myId:0, roundResult:null };
+let pref='auto', wantCount=6;
+
+const PASTEL=['#7fb2ff','#8fdc8a','#ffcf6a','#c79bff','#ff9ec4','#7fe3d6','#f2a26a','#b6d36a'];
+const NAMES=['라온','바다','다온','토리','오리','네모','솔','바로','미르','하늬','노을','가온'];
+
+function rand(a,b){ return a+Math.random()*(b-a); }
+function dist2(a,b){ const dx=a.x-b.x,dy=a.y-b.y; return dx*dx+dy*dy; }
+function hitsWall(x,y,r){
+  if(x<r||y<r||x>AW-r||y>AH-r) return true;
+  for(const w of walls){ if(x> w.x-r && x< w.x+w.w+r && y> w.y-r && y< w.y+w.h+r) return true; }
+  return false;
+}
+
+function makePlayer(id,isBot){
+  return { id, isBot, name: isBot?NAMES[id%NAMES.length]:'나', color:PASTEL[id%PASTEL.length],
+    x:0,y:0, vx:0,vy:0, role:'runner', spy:false, alive:true, jailed:false, jailT:0,
+    invuln:0, score:0, face:0, botTimer:0, botTarget:null };
+}
+
+function spawnPos(){
+  for(let i=0;i<200;i++){ const x=rand(80,AW-80), y=rand(260,AH-80);
+    if(!hitsWall(x,y,R+4) && !(x>jail.x-40&&x<jail.x+jail.w+40&&y<jail.y+jail.h+40)) return {x,y}; }
+  return {x:AW/2,y:AH/2};
+}
+
+function assignRoles(){
+  const n=S.players.length;
+  const hunters = n<=4?1 : n<=7?2 : 3;
+  const hasSpy = n>=4;
+  // 희망 역할 반영: 나(myId)
+  const ids = S.players.map(p=>p.id);
+  const hunterSet = new Set();
+  const me = S.players[S.myId];
+  if(pref==='hunter'){ hunterSet.add(me.id); }
+  // 나머지 헌터 채우기 (나 제외 랜덤, pref=runner면 나는 헌터 안 됨)
+  const pool = ids.filter(id=> id!==me.id || pref==='auto');
+  while(hunterSet.size<hunters){ const c=pool[Math.floor(Math.random()*pool.length)]; hunterSet.add(c); if(hunterSet.size>=hunters) break; if(pool.every(id=>hunterSet.has(id))) break; }
+  // 스파이: 러너 중 1명 (나는 스파이 될 수도)
+  let spyId=-1;
+  if(hasSpy){ const runners=ids.filter(id=>!hunterSet.has(id)); spyId=runners[Math.floor(Math.random()*runners.length)]; }
+  for(const p of S.players){ p.role = hunterSet.has(p.id)?'hunter':'runner'; p.spy = (p.id===spyId);
+    p.alive=true; p.jailed=false; p.jailT=0; p.invuln=1.2; p.score=0; const s=spawnPos();
+    if(p.role==='hunter'){ p.x=AW/2; p.y=AH-120; } else { p.x=s.x; p.y=s.y; } }
+}
+
+// ---- 입력 ----
+const keys={};
+addEventListener('keydown',e=>{ keys[e.code]=true; if(e.code==='Space'){e.preventDefault(); doAction();} });
+addEventListener('keyup',e=>{ keys[e.code]=false; });
+const joy={active:false,id:-1,ox:0,oy:0,x:0,y:0};
+const joyBase=document.getElementById('joyBase'), joyThumb=document.getElementById('joyThumb');
+cv.addEventListener('touchstart',e=>{ e.preventDefault();
+  for(const t of e.changedTouches){ if(!joy.active && t.clientX<innerWidth*0.6){ joy.active=true; joy.id=t.identifier; joy.ox=t.clientX; joy.oy=t.clientY; joy.x=0; joy.y=0;
+    joyBase.style.display='block'; joyBase.style.left=(t.clientX-59)+'px'; joyBase.style.top=(t.clientY-59)+'px';
+    joyThumb.style.display='block'; joyThumb.style.left=(t.clientX-25)+'px'; joyThumb.style.top=(t.clientY-25)+'px'; } }
+},{passive:false});
+cv.addEventListener('touchmove',e=>{ e.preventDefault();
+  for(const t of e.changedTouches){ if(t.identifier===joy.id){ let dx=t.clientX-joy.ox, dy=t.clientY-joy.oy; const l=Math.hypot(dx,dy),m=48; if(l>m){dx*=m/l;dy*=m/l;}
+    joy.x=dx/m; joy.y=dy/m; joyThumb.style.left=(joy.ox+dx-25)+'px'; joyThumb.style.top=(joy.oy+dy-25)+'px'; } }
+},{passive:false});
+function endT(e){ for(const t of e.changedTouches){ if(t.identifier===joy.id){ joy.active=false; joy.id=-1; joy.x=0; joy.y=0; joyBase.style.display='none'; joyThumb.style.display='none'; } } }
+cv.addEventListener('touchend',endT); cv.addEventListener('touchcancel',endT);
+document.getElementById('actBtn').addEventListener('touchstart',e=>{ e.preventDefault(); e.stopPropagation(); doAction(); },{passive:false});
+
+// ---- PD 연출 ----
+const pdBanner=document.getElementById('pdBanner'), pdLogEl=document.getElementById('pdLog');
+let bannerT=null, pdLines=[];
+function pdBig(msg,sub){ pdBanner.innerHTML=msg+(sub?('<small>'+sub+'</small>'):''); pdBanner.style.opacity=1; clearTimeout(bannerT); bannerT=setTimeout(()=>pdBanner.style.opacity=0,2600); }
+function pdLog(msg){ pdLines.push(msg); if(pdLines.length>4) pdLines.shift(); pdLogEl.innerHTML=pdLines.map(l=>'<b>PD</b> '+l).join('<br>'); }
+
+// ---- 액션 (구출 / 스위치 / 스파이 사보타주) ----
+function doAction(){
+  const me=S.players[S.myId]; if(!me||!me.alive||me.jailed||S.phase!=='play') return;
+  // 감옥 근처의 갇힌 동료 구출 (러너만)
+  if(me.role==='runner'){
+    for(const p of S.players){ if(p.jailed && p.alive && dist2(me,p)<(52*52)){ freeFromJail(p, me); return; } }
+    // 스위치 상호작용
+    for(const sw of switches){ if(dist2(me,sw)<(46*46)){
+      if(me.spy){ if(sw.on){ sw.on=false; pdLog(me.name+'이(가) 스위치를 껐다?! (수상하다)'); } }
+      else { if(!sw.on){ sw.on=true; pdLog('스위치 하나 작동! ('+switches.filter(s=>s.on).length+'/3)'); checkMission(); } }
+      return;
+    }}
+  }
+}
+function freeFromJail(p, by){ p.jailed=false; p.jailT=0; p.invuln=2.0; const s=spawnPos(); p.x=s.x; p.y=s.y;
+  pdBig('🔓 구출!', (by?by.name:'누군가')+'이(가) '+p.name+'을(를) 구했다'); pdLog(p.name+' 구출 성공!'); }
+
+function checkMission(){ if(S.missionDone) return;
+  if(switches.every(s=>s.on)){ S.missionDone=true; S.missionActive=false; S.freezeT=6;
+    for(const p of S.players) if(p.role==='hunter'){ p.vx=0; p.vy=0; }
+    pdBig('✅ 팀 미션 성공!', '헌터 6초 정지! 지금이 기회다');
+    pdLog('팀 미션 성공 → 헌터 정지!'); for(const p of S.players) if(p.role==='runner'&&p.alive) p.score+=10;
+    document.getElementById('mission').textContent='📋 성공!';
+  }
+}
+
+// ---- 잡기/감옥 ----
+function jailPlayer(p, by){ if(p.jailed||p.invuln>0) return;
+  if(!p.everCaught){ p.everCaught=true; p.jailed=true; p.jailT=14; p.x=jail.x+jail.w/2+rand(-50,50); p.y=jail.y+jail.h/2+rand(-30,30); p.vx=0; p.vy=0;
+    pdBig('🚨 체포!', p.name+'이(가) 감옥으로! 동료가 구할 수 있다'); pdLog((by?by.name:'헌터')+'이(가) '+p.name+' 체포'); }
+  else { eliminate(p, '두 번째 체포'); }
+}
+function eliminate(p, why){ p.alive=false; p.jailed=false;
+  pdBig('💥 탈락!', p.name+' ('+why+')'); pdLog(p.name+' 완전 탈락 ('+why+')'); }
+
+// ---- 봇 AI ----
+function botThink(p, dt){
+  p.botTimer-=dt;
+  const runners=S.players.filter(q=>q.alive&&!q.jailed&&q.role==='runner');
+  const hunters=S.players.filter(q=>q.alive&&q.role==='hunter');
+  let ax=0, ay=0;
+  if(p.role==='hunter'){
+    if(S.freezeT>0){ p.vx=0; p.vy=0; return; }
+    let best=null,bd=1e9; for(const r of runners){ const d=dist2(p,r); if(d<bd){bd=d;best=r;} }
+    if(best){ ax=best.x-p.x; ay=best.y-p.y; }
+    else { ax=rand(-1,1); ay=rand(-1,1); }
+  } else {
+    // 러너: 가장 가까운 헌터 회피 + 가끔 스위치로
+    let near=null,nd=1e9; for(const h of hunters){ const d=dist2(p,h); if(d<nd){nd=d;near=h;} }
+    const flee = nd<(320*320);
+    if(flee && near){ ax=p.x-near.x; ay=p.y-near.y; }
+    else {
+      if(!p.botTarget || p.botTimer<=0 || (p.botTarget && dist2(p,p.botTarget)<(50*50))){
+        // 스파이: 켜진 스위치 끄러, 러너: 꺼진 스위치 켜러
+        const cand = p.spy ? switches.filter(s=>s.on) : switches.filter(s=>!s.on);
+        p.botTarget = cand.length? cand[Math.floor(Math.random()*cand.length)] : {x:rand(80,AW-80),y:rand(260,AH-80)};
+        p.botTimer=rand(1.5,3.5);
+      }
+      ax=p.botTarget.x-p.x; ay=p.botTarget.y-p.y;
+      // 갇힌 동료 구출하러 (스파이 아님)
+      if(!p.spy){ for(const q of S.players){ if(q.jailed&&q.alive){ if(dist2(p,q)<(400*400)){ ax=q.x-p.x; ay=q.y-p.y; } } } }
+    }
+  }
+  const l=Math.hypot(ax,ay)||1; p.ivx=ax/l; p.ivy=ay/l;
+  // 봇 상호작용
+  if(p.role==='runner'){
+    for(const q of S.players){ if(q.jailed&&q.alive&&dist2(p,q)<(48*48)&&!p.spy){ freeFromJail(q,p); } }
+    for(const sw of switches){ if(dist2(p,sw)<(42*42)){ if(p.spy&&sw.on){ sw.on=false; } else if(!p.spy&&!sw.on){ sw.on=true; checkMission(); } } }
+  }
+}
+
+// ---- 갱신 ----
+function step(dt){
+  if(S.phase!=='play') return;
+  S.time-=dt; if(S.freezeT>0) S.freezeT-=dt;
+  if(!S.missionActive && !S.missionDone && S.time < S.dur-6){ S.missionActive=true;
+    pdBig('📋 팀 미션!', '스위치 3개를 모두 작동시켜라 → 헌터 정지'); pdLog('팀 미션 시작: 스위치 3개'); document.getElementById('mission').textContent='📋 스위치 '+switches.filter(s=>s.on).length+'/3'; }
+
+  const me=S.players[S.myId];
+  for(const p of S.players){
+    if(!p.alive) continue;
+    if(p.invuln>0) p.invuln-=dt;
+    if(p.jailed){ p.jailT-=dt; if(p.jailT<=0){ eliminate(p,'감옥 시간 초과'); } continue; }
+    // 입력
+    let ix=0,iy=0;
+    if(p===me && !p.isBot){
+      if(keys.KeyW||keys.ArrowUp) iy-=1; if(keys.KeyS||keys.ArrowDown) iy+=1;
+      if(keys.KeyA||keys.ArrowLeft) ix-=1; if(keys.KeyD||keys.ArrowRight) ix+=1;
+      ix+=joy.x; iy+=joy.y; const l=Math.hypot(ix,iy); if(l>1){ix/=l;iy/=l;}
+    } else { botThink(p,dt); ix=p.ivx||0; iy=p.ivy||0; }
+    let spd = p.role==='hunter'?224:210;
+    if(p.role==='hunter'&&S.freezeT>0) spd=0;
+    if(p.invuln>0 && p.role==='runner') spd*=1.05;
+    // 이동 + 벽 충돌(축 분리)
+    let nx=p.x+ix*spd*dt; if(!hitsWall(nx,p.y,R)) p.x=nx;
+    let ny=p.y+iy*spd*dt; if(!hitsWall(p.x,ny,R)) p.y=ny;
+    if(ix||iy) p.face=Math.atan2(iy,ix);
+  }
+  // 잡기 판정
+  for(const h of S.players){ if(!h.alive||h.role!=='hunter'||S.freezeT>0) continue;
+    for(const r of S.players){ if(!r.alive||r.jailed||r.role!=='runner'||r.invuln>0) continue;
+      if(dist2(h,r)<CATCH*CATCH) jailPlayer(r,h); } }
+
+  // HUD
+  document.getElementById('timer').textContent='⏱ '+Math.max(0,Math.ceil(S.time));
+  const aliveRunners=S.players.filter(p=>p.alive&&p.role==='runner');
+  const freeRunners=aliveRunners.filter(p=>!p.jailed);
+  document.getElementById('alive').textContent='🏃 '+freeRunners.length+'/'+S.players.filter(p=>p.role==='runner').length;
+  if(S.missionActive) document.getElementById('mission').textContent='📋 스위치 '+switches.filter(s=>s.on).length+'/3';
+
+  // 승패
+  if(aliveRunners.length===0){ endRound('hunter'); }
+  else if(S.time<=0){ endRound('runner'); }
+}
+
+function endRound(winnerSide){
+  S.phase='over'; S.winner=winnerSide;
+  const me=S.players[S.myId];
+  const spyAlive = S.players.find(p=>p.spy);
+  let title, sub;
+  const iAmHunter=me.role==='hunter', iAmSpy=me.spy;
+  // 스파이 승리 판정: 헌터가 이기면 스파이도 승리
+  const spyWon = winnerSide==='hunter';
+  if(winnerSide==='hunter'){ title='👹 헌터 승리!'; sub='도망자를 모두 잡았다'; }
+  else { title='🏃 도망자 승리!'; sub='제한시간까지 살아남았다'; }
+  let mine;
+  if(iAmSpy) mine = spyWon? '🕵️ 스파이(나) 승리! 아무도 몰랐지…' : '🕵️ 스파이(나) 패배…';
+  else if(iAmHunter) mine = winnerSide==='hunter'? '내(헌터) 승리 🎉' : '내(헌터) 패배';
+  else mine = winnerSide==='runner'? (me.alive?'내(도망자) 생존 승리 🎉':'우리 팀 승리! (난 탈락했지만)') : '내(도망자) 패배';
+  document.getElementById('resultTitle').textContent=title;
+  document.getElementById('resultSub').textContent=sub;
+  const spy=S.players.find(p=>p.spy);
+  document.getElementById('resultDetail').innerHTML = mine + '<br><br>숨어있던 스파이: <b>'+(spy?spy.name:'없음')+'</b>';
+  setTimeout(()=>{ document.getElementById('result').style.display='flex'; }, 1200);
+}
+
+// ---- 렌더 ----
+function draw(){
+  ctx.clearRect(0,0,W,H);
+  const me=S.players[S.myId]||{x:AW/2,y:AH/2};
+  let camx=Math.max(0,Math.min(AW-W, me.x-W/2)), camy=Math.max(0,Math.min(AH-H, me.y-H/2));
+  if(AW<W) camx=(AW-W)/2; if(AH<H) camy=(AH-H)/2;
+  ctx.save(); ctx.translate(-camx,-camy);
+  // 바닥
+  ctx.fillStyle='#3a4668'; ctx.fillRect(0,0,AW,AH);
+  ctx.strokeStyle='rgba(255,255,255,.05)'; ctx.lineWidth=1;
+  for(let x=0;x<AW;x+=64){ ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,AH); ctx.stroke(); }
+  for(let y=0;y<AH;y+=64){ ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(AW,y); ctx.stroke(); }
+  // 감옥
+  ctx.fillStyle='rgba(120,90,90,.35)'; ctx.fillRect(jail.x,jail.y,jail.w,jail.h);
+  ctx.strokeStyle='#b98a8a'; ctx.lineWidth=4; ctx.strokeRect(jail.x,jail.y,jail.w,jail.h);
+  ctx.fillStyle='#b98a8a'; for(let x=jail.x+16;x<jail.x+jail.w;x+=22){ ctx.fillRect(x,jail.y,3,jail.h); }
+  ctx.fillStyle='#e0c0c0'; ctx.font='bold 18px sans-serif'; ctx.textAlign='center'; ctx.fillText('🔒 감옥',jail.x+jail.w/2,jail.y-8);
+  // 벽
+  ctx.fillStyle='#5b6890'; for(const w of walls){ ctx.fillRect(w.x,w.y,w.w,w.h); }
+  // 스위치
+  for(const sw of switches){ ctx.beginPath(); ctx.arc(sw.x,sw.y,26,0,7); ctx.fillStyle=sw.on?'#7de08a':'#e0d17d'; ctx.fill();
+    ctx.lineWidth=4; ctx.strokeStyle=sw.on?'#4fae5c':'#b0a24a'; ctx.stroke();
+    ctx.fillStyle=sw.on?'#2e6e37':'#6a5f18'; ctx.font='bold 22px sans-serif'; ctx.fillText(sw.on?'✓':'⚙',sw.x,sw.y+8); }
+  // 플레이어
+  for(const p of S.players){ if(!p.alive) continue;
+    const isHunter=p.role==='hunter';
+    ctx.globalAlpha = p.jailed?0.7:1;
+    // 본인 하이라이트
+    if(p===me){ ctx.beginPath(); ctx.arc(p.x,p.y,R+7,0,7); ctx.strokeStyle='#ffe08a'; ctx.lineWidth=3; ctx.stroke(); }
+    if(p.invuln>0){ ctx.beginPath(); ctx.arc(p.x,p.y,R+4,0,7); ctx.strokeStyle='rgba(255,255,255,.7)'; ctx.lineWidth=2; ctx.stroke(); }
+    ctx.beginPath(); ctx.arc(p.x,p.y,R,0,7);
+    ctx.fillStyle = isHunter ? (S.freezeT>0?'#8fb6e0':'#e05a5a') : p.color; ctx.fill();
+    ctx.lineWidth=3; ctx.strokeStyle='rgba(0,0,0,.25)'; ctx.stroke();
+    // 눈
+    const fx=Math.cos(p.face||0)*4, fy=Math.sin(p.face||0)*4;
+    ctx.fillStyle='#fff'; ctx.beginPath(); ctx.arc(p.x-5+fx,p.y-3+fy,3.4,0,7); ctx.arc(p.x+5+fx,p.y-3+fy,3.4,0,7); ctx.fill();
+    ctx.fillStyle='#222'; ctx.beginPath(); ctx.arc(p.x-5+fx,p.y-3+fy,1.7,0,7); ctx.arc(p.x+5+fx,p.y-3+fy,1.7,0,7); ctx.fill();
+    // 헌터 뿔 표시
+    if(isHunter){ ctx.fillStyle=S.freezeT>0?'#6f95c8':'#b83a3a'; ctx.beginPath(); ctx.moveTo(p.x-11,p.y-13); ctx.lineTo(p.x-6,p.y-22); ctx.lineTo(p.x-2,p.y-14); ctx.fill();
+      ctx.beginPath(); ctx.moveTo(p.x+11,p.y-13); ctx.lineTo(p.x+6,p.y-22); ctx.lineTo(p.x+2,p.y-14); ctx.fill(); }
+    // 이름
+    ctx.globalAlpha=1; ctx.fillStyle='rgba(255,255,255,.92)'; ctx.font='bold 12px sans-serif'; ctx.textAlign='center';
+    ctx.fillText(p.name + (p===me&&p.spy?' 🕵️':''), p.x, p.y+R+13);
+    if(p.jailed){ ctx.fillStyle='#ffcaca'; ctx.fillText('⏳'+Math.ceil(p.jailT), p.x, p.y-R-6); }
+  }
+  ctx.globalAlpha=1; ctx.restore();
+}
+
+// ---- 루프 ----
+let last=performance.now();
+function loop(now){ requestAnimationFrame(loop); let dt=(now-last)/1000; last=now; if(dt>0.05)dt=0.05;
+  step(dt); draw();
+  // 액션 버튼 표시 (구출/스위치 가능할 때)
+  const me=S.players[S.myId];
+  if(S.phase==='play' && me && me.alive && !me.jailed && me.role==='runner'){
+    let show=false;
+    for(const p of S.players){ if(p.jailed&&p.alive&&dist2(me,p)<(52*52)) show=true; }
+    for(const sw of switches){ if(dist2(me,sw)<(46*46)) show=true; }
+    const btn=document.getElementById('actBtn'); btn.style.display = (show && ('ontouchstart' in window))?'flex':'none';
+    btn.textContent = me.spy? '방해' : '액션';
+  } else { document.getElementById('actBtn').style.display='none'; }
+}
+requestAnimationFrame(loop);
+
+// ---- 라운드 시작 ----
+function startRound(){
+  S.players=[]; for(let i=0;i<wantCount;i++) S.players.push(makePlayer(i, i!==0));
+  S.myId=0; resetSwitches(); assignRoles();
+  S.time=S.dur; S.phase='play'; S.missionActive=false; S.missionDone=false; S.freezeT=0; S.winner=null;
+  for(const p of S.players) p.everCaught=false;
+  pdLines=[]; pdLogEl.innerHTML='';
+  const me=S.players[S.myId];
+  const rc=document.getElementById('roleCard');
+  if(me.role==='hunter'){ rc.textContent='나의 역할: 👹 헌터 — 도망자를 모두 잡아라!'; rc.style.background='rgba(120,40,40,.85)'; }
+  else if(me.spy){ rc.textContent='나의 역할: 🕵️ 스파이 — 도망자인 척, 몰래 미션 방해!'; rc.style.background='rgba(90,60,120,.9)'; }
+  else { rc.textContent='나의 역할: 🏃 도망자 — 잡히지 말고 살아남아라!'; rc.style.background='rgba(30,70,120,.85)'; }
+  document.getElementById('splash').style.display='none';
+  document.getElementById('result').style.display='none';
+  pdBig('🎬 게임 시작!', me.role==='hunter'?'너는 헌터다':(me.spy?'너는 스파이다 (비밀!)':'살아남아라!'));
+  pdLog('라운드 시작 — 인원 '+wantCount+'명');
+}
+
+// ---- 메뉴 ----
+document.getElementById('help').innerHTML =
+  ('ontouchstart' in window)
+  ? '👈 왼쪽 드래그로 이동<br>🟡 <b>액션</b> 버튼: 스위치 작동 · 갇힌 동료 구출<br>👹 헌터를 피해 제한시간까지 <b>생존</b><br>📋 PD의 팀 미션 성공 → 헌터 잠시 정지<br>🕵️ 스파이면 몰래 미션을 <b>방해</b>!'
+  : '⌨️ WASD/화살표로 이동 · <b>Space</b> 액션<br>🟡 액션: 스위치 작동 · 갇힌 동료 구출<br>👹 헌터를 피해 제한시간까지 <b>생존</b><br>📋 PD의 팀 미션 성공 → 헌터 잠시 정지<br>🕵️ 스파이면 몰래 미션을 <b>방해</b>!';
+document.querySelectorAll('.choice').forEach(c=>c.addEventListener('click',()=>{ document.querySelectorAll('.choice').forEach(x=>x.classList.remove('on')); c.classList.add('on'); pref=c.dataset.pref; }));
+document.getElementById('pMinus').addEventListener('click',()=>{ wantCount=Math.max(3,wantCount-1); document.getElementById('pCount').textContent=wantCount; });
+document.getElementById('pPlus').addEventListener('click',()=>{ wantCount=Math.min(10,wantCount+1); document.getElementById('pCount').textContent=wantCount; });
+const playBtn=document.getElementById('playBtn');
+playBtn.addEventListener('click', startRound);
+document.getElementById('againBtn').addEventListener('click', startRound);
+window.__loaded=true; playBtn.disabled=false; playBtn.textContent='시작하기';
+
+window.__dbg=()=>({phase:S.phase, time:+S.time.toFixed(1), me:S.players[S.myId]&&{role:S.players[S.myId].role,spy:S.players[S.myId].spy,alive:S.players[S.myId].alive,jailed:S.players[S.myId].jailed}, alive:S.players.filter(p=>p.alive&&p.role==='runner').length, hunters:S.players.filter(p=>p.role==='hunter').length, switches:switches.map(s=>s.on), freeze:+S.freezeT.toFixed(1), winner:S.winner});
+</script>
+</body>
+</html>
