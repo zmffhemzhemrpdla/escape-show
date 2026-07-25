@@ -284,8 +284,8 @@ function assignRoles(){
 }
 
 // ---- 입력 ----
-const keys={}; let camYaw=0, camPitch=0.6, dragId=-1, lastX=0, lastY=0;
-const clampP=v=>Math.max(0.2,Math.min(1.4,v));
+const keys={}; let camYaw=0, camPitch=0.55, dragId=-1, lastX=0, lastY=0;
+const clampP=v=>Math.max(0.22,Math.min(1.15,v));
 addEventListener('keydown',e=>{ keys[e.code]=true; if(e.code==='Space'){e.preventDefault(); doAction();} if(e.code==='KeyQ') camYaw+=0.12; if(e.code==='KeyE') camYaw-=0.12; if(e.code==='KeyR') camPitch=clampP(camPitch+0.08); if(e.code==='KeyF') camPitch=clampP(camPitch-0.08); });
 addEventListener('keyup',e=>{ keys[e.code]=false; });
 const joy={active:false,id:-1,ox:0,oy:0,x:0,y:0};
@@ -358,8 +358,10 @@ function step(dt){ if(S.phase!=='play') return;
       if(keys.KeyW||keys.ArrowUp) fz-=1; if(keys.KeyS||keys.ArrowDown) fz+=1; if(keys.KeyA||keys.ArrowLeft) fx-=1; if(keys.KeyD||keys.ArrowRight) fx+=1;
       fx+=joy.x; fz+=joy.y; const l=Math.hypot(fx,fz); if(l>1){fx/=l;fz/=l;}
       // 카메라 방향 기준 이동
+      // 카메라 기준 이동: 전방 F=(sin,cos), 화면오른쪽 Rt=(-cos,sin)
       const cos=Math.cos(camYaw), sin=Math.sin(camYaw);
-      ix=fx*cos - fz*sin; iz=fx*sin + fz*cos;
+      ix = -fx*cos - fz*sin;
+      iz =  fx*sin - fz*cos;
     } else { botThink(p,dt); ix=p.ivx||0; iz=p.ivz||0; }
     let spd=p.role==='hunter'?6.4:6.0; if(p.role==='hunter'&&S.freezeT>0) spd=0; if(p.invuln>0&&p.role==='runner') spd*=1.05;
     let nx=p.x+ix*spd*dt; if(!hitsWall(nx,p.z,R)) p.x=nx;
@@ -402,12 +404,12 @@ function render(){
   // 카메라: 플레이어 뒤+위, camYaw 회전
   const t=me&&me.alive?me:{x:32,z:22};
   const portrait = innerHeight>innerWidth;
-  const dist=portrait?10:8.6;
+  const dist=portrait?9.5:8.2;
   const horiz=Math.cos(camPitch)*dist, vy=Math.sin(camPitch)*dist;
-  let cd=horiz; // 벽에 가리면 당겨오기
-  for(let s=1.2;s<horiz;s+=0.4){ if(hitsWall(t.x-Math.sin(camYaw)*s, t.z-Math.cos(camYaw)*s, 0.3)){ cd=Math.max(1.4,s-0.4); break; } }
+  let cd=horiz; // 카메라가 벽에 가리면 당겨오기 (촘촘 샘플)
+  for(let s=0.6;s<horiz;s+=0.22){ if(hitsWall(t.x-Math.sin(camYaw)*s, t.z-Math.cos(camYaw)*s, 0.38)){ cd=Math.max(1.2,s-0.3); break; } }
   const cx=t.x - Math.sin(camYaw)*cd, cz=t.z - Math.cos(camYaw)*cd;
-  camera.position.set(cx, 1.3+vy, cz); camera.lookAt(t.x, 1.3, t.z);
+  camera.position.set(cx, Math.max(1.6, 1.3+vy*(cd/horiz)), cz); camera.lookAt(t.x, 1.3, t.z);
   // 액션 버튼
   const btn=document.getElementById('actBtn');
   if(S.phase==='play'&&me&&me.alive&&!me.jailed&&me.role==='runner'&&('ontouchstart' in window)){
@@ -448,7 +450,7 @@ document.getElementById('pPlus').addEventListener('click',()=>{ wantCount=Math.m
 document.getElementById('playBtn').addEventListener('click',startRound);
 document.getElementById('againBtn').addEventListener('click',startRound);
 window.__loaded=true; const pb=document.getElementById('playBtn'); pb.disabled=false; pb.textContent='시작하기';
-window.__dbg=()=>({phase:S.phase,time:+S.time.toFixed(1),camYaw:+camYaw.toFixed(2),me:S.players[S.myId]&&{role:S.players[S.myId].role,spy:S.players[S.myId].spy,alive:S.players[S.myId].alive,jailed:S.players[S.myId].jailed,x:+S.players[S.myId].x.toFixed(1),z:+S.players[S.myId].z.toFixed(1)},alive:S.players.filter(p=>p.alive&&p.role==='runner').length,hunters:S.players.filter(p=>p.role==='hunter').length,switches:switches.map(s=>s.on),freeze:+S.freezeT.toFixed(1),winner:S.winner});
+window.__dbg=()=>({phase:S.phase,time:+S.time.toFixed(1),camYaw:+camYaw.toFixed(2),camPitch:+camPitch.toFixed(2),me:S.players[S.myId]&&{role:S.players[S.myId].role,spy:S.players[S.myId].spy,alive:S.players[S.myId].alive,jailed:S.players[S.myId].jailed,x:+S.players[S.myId].x.toFixed(2),z:+S.players[S.myId].z.toFixed(2)},alive:S.players.filter(p=>p.alive&&p.role==='runner').length,hunters:S.players.filter(p=>p.role==='hunter').length,switches:switches.map(s=>s.on),freeze:+S.freezeT.toFixed(1),winner:S.winner});
 </script>
 </body>
 </html>
